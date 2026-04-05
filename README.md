@@ -1,93 +1,91 @@
 # Finance Data Processing and Access Control Backend
 **Backend Developer Internship Assignment**
 
-A fully functional, asynchronous REST backend built to process, persist, and aggregate financial data alongside strict Role-Based Access Controls (RBAC). 
+This is an asynchronous REST backend built using FastAPI. It is designed to process, persist, and aggregate financial data, while strictly enforcing Role-Based Access Controls (RBAC).
 
-This repository was designed specifically to align with the provided assignment prompt, hitting 100% of the **Core Requirements** and all 7 **Optional Enhancements**.
+This repository was built to align directly with the assignment prompt. It covers all of the core requirements and every optional enhancement listed in the specifications.
 
 ---
 
-## 🚀 Setup Instructions (Local Environment)
+## Setup Instructions (Local Environment)
 
-To ensure this project is incredibly easy for evaluators to test, the application is packaged with an **Automated DB Seeding configuration** and runs on Python natively.
+To make it as easy as possible to test this application locally, the project is configured to run on Python without requiring any complex Docker or database setup. It also includes an automated database seeding script.
 
 ### 1. Requirements & Installation
-Ensure you are using `Python 3.10+`. Open your terminal and run:
+Please ensure you are using Python 3.10 or higher. You can set everything up in your terminal by running:
 
 ```bash
-# 1. Create a Python virtual environment
+# Create a Python virtual environment
 python -m venv venv
 
-# 2. Activate the environment (Mac/Linux)
+# Activate the environment (Mac/Linux)
 source venv/bin/activate 
 
-# 3. Install required dependencies
+# Install required dependencies
 pip install -r requirements.txt
 ```
 
 ### 2. Run the Application
-Start the native `uvicorn` FastAPI server natively.
+You can start the FastAPI server natively using uvicorn:
 
 ```bash
 uvicorn app.main:app --reload
 ```
-> **Self-Starting Magic**: Upon first startup, the backend automatically generates its own SQLite database schema and seeds **3 Mock Users** and **10 mock financial records** so you can instantly begin testing the Dashboard APIs!
+> **Note on Auto-Seeding**: When you start the server for the first time, it automatically generates the SQLite database schema and seeds it with three mock users and ten mock financial records. This means you can start testing the dashboard APIs immediately.
 
 ### 3. Running Unit Tests
-To mathematically verify all API integrations are successful natively, run:
+If you want to run the automated testing suite to verify the API endpoints, run:
 ```bash
 pytest -v
 ```
 
 ---
 
-## 🧭 Testing the APIs natively (Swagger UI)
+## Testing the APIs (Swagger UI)
 
-FastAPI automatically generates an interactive Swagger interface. You can test all endpoints without Postman!
-1. Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) in your browser.
-2. Click the **Authorize** lock button at the top.
-3. Log in using one of the mock seeded accounts (Password for all is `password123`):
-   - **Admin**: `admin@finance.com` (Full CRUD)
-   - **Analyst**: `analyst@finance.com` (Read-only + Dashboard)
-   - **Viewer**: `viewer@finance.com` (Dashboard only)
-4. Execute endpoints and observe how permissions block unauthorized requests!
+FastAPI automatically generates an interactive Swagger interface, so you can test all the endpoints directly in your browser without needing tools like Postman.
+
+1. Open http://127.0.0.1:8000/docs in your browser.
+2. Click the Authorize button at the top right.
+3. Log in using any of the mock seeded accounts (the password for all of them is `password123`):
+   - **Admin**: `admin@finance.com` (Has full CRUD access)
+   - **Analyst**: `analyst@finance.com` (Read-only access and dashboard views)
+   - **Viewer**: `viewer@finance.com` (Can only view the dashboard)
+4. From there, you can execute the endpoints and test how the permission system blocks unauthorized requests.
 
 ---
 
-## 🏗️ Architecture and Design Decisions (Mapping to the Rubric)
+## Architecture and Design Decisions 
 
-### 1. Backend Design & Logical Thinking
-The system follows a heavily Layered Enterprise Design pattern:
-* **Models Layer (`app/models`)**: Defines SQL database properties safely.
-* **Schemas Layer (`app/schemas`)**: Uses Pydantic logic boundaries. Validating things like `amount > 0` rests cleanly on this layer before the network controller even touches it, preventing unnecessary broken `NULL` constraint inserts from reaching SQL.
-* **Controller Layer (`app/api/endpoints`)**: The actual FastAPI Routing layer separated by responsibility.
+### 1. Backend Design & Separation of Concerns
+This project is structured using a layered architecture pattern:
+* **Models Layer (app/models)**: This layer safely defines the SQL database tables.
+* **Schemas Layer (app/schemas)**: This layer uses Pydantic to set logic boundaries. Validating data (like ensuring an amount is greater than zero) is handled cleanly by this layer before it ever reaches the network controller. This prevents bad data from reaching the database level.
+* **Controller Layer (app/api/endpoints)**: This is where the actual FastAPI routes live, separated according to their distinct responsibilities.
 
 ### 2. Access Control Logic (RBAC)
-Instead of forcing redundant `if current_user.role == "Admin":` check blocks independently on all 15 endpoints, we utilize **FastAPI Dependency Injections**. The `RequireRole` class executes structurally prior to the API endpoint even triggering. If a Viewer attempts to hit a `DELETE` endpoint, it throws a pristine `403 Forbidden` response instantly.
+Instead of forcing repetitive `if current_user.role == "Admin":` checks inside every single endpoint, I used FastAPI Dependency Injections. By creating a `RequireRole` class, the permission check evaluates before the API endpoint even triggers. If a Viewer attempts to hit a DELETE endpoint, the system catches it and throws a 403 Forbidden response immediately.
 
-### 3. Business Logic & Dashboard Mathematics
-Rather than polling 10,000 JSON records into Python memory and writing a slow `for` loop to manually sum up `Net Balances`, we offloaded the mathematics to SQLAlchemy's `func.sum()` and `group_by()`. This calculates the numeric value inside the database layer in C, shaving milliseconds off of large mathematical queries.
+### 3. Business Logic & Dashboard Calculations
+Rather than loading thousands of JSON records into Python's memory and writing a slow loop to manually calculate the net balances, I moved the math directly to the database layer. By leveraging SQLAlchemy's `func.sum()` and `group_by()` methods, the database computes the numerical values using its C-optimized engine, which is significantly faster for data aggregation.
 
 ### 4. Validation and Reliability
-The architecture protects itself from spam via **Rate Limiting**. A global `slowapi` instance is mounted natively to track spamming IPs natively. Any bots attempting to spam our backend will be gracefully blocked under `HTTP 429 Too Many Requests`.
+To protect the system from spam or malicious scripts, I added global rate limiting. Using `slowapi`, the application tracks incoming IPs. If any automated bots attempt to overwhelm the backend, they are blocked with an HTTP 429 Too Many Requests response.
 
 ---
 
-## ⚖️ Tradeoffs Considered
+## Tradeoffs Considered
 
-1. **Database Selection (Postgres over simplified SQLite)**: 
-   Typically, a massive financial system warrants deploying isolated isolated PostgreSQL dockers. However, to prioritize the evaluation constraint that it must be "easy to setup", I altered the Async engine bindings to utilize a single simplified `finance.db` SQLite fallback natively. This retains extreme speed and complexity without forcing evaluators to setup Docker.
+1. **Database Selection (SQLite over PostgreSQL)**: 
+   Normally, an application processing financial data would warrant deploying a robust database like PostgreSQL via Docker. However, I noticed the evaluation constraints emphasized making the application easy to set up. To respect that, I configured the asynchronous engine to fall back on a simple SQLite file (`finance.db`). This maintains the speed and complexity of the asynchronous design without forcing the reviewer to configure a Docker container.
 2. **Speed Over RAM Payload (Pagination)**:
-   For `GET /records`, returning all documents at once is easy but crushes memory. We traded marginally more complex backend route parameters (`skip`/`limit`) to guarantee scalable pagination natively.
+   For fetching records locally, returning all rows simultaneously is easier to write but it uses an enormous amount of memory as the database grows. I decided to introduce pagination parameters (`skip` and `limit`) to the routes, trading a slightly more complex backend structure for guaranteed scalability and reduced RAM usage.
 
 ---
 
-## 🧠 Assumptions Made
+## Assumptions Made
 
-1. **Soft-Deleting is preferable to Hard Deleting**:
-   In finance, data audits are strictly mandatory. We made the assumption that an Admin deleting a user or record should not execute `db.delete()`. Instead, we set up `is_deleted = boolean` functionality and forced the endpoints to filter active queries natively. This is historically safer.
-2. **JWT Stateless Scaling over Sessions**:
-   We assumed the Dashboard system will scale heavily. Therefore, we utilize JSON Web Tokens. Because the Server does not need to store an enormous memory list of active "Sessions", the server requires fractionally less compute to service heavy authentication loads. We implemented `passlib` bcrypt hashing specifically to secure this.
-
----
-*Created intentionally to exceed the Backend engineering internship expectations.*
+1. **Soft Deletion is standard practice**:
+   In finance, data audits are strictly required, so destroying data isn't a good idea. I assumed that an Admin deleting a user or record should not actually trigger a hard database deletion. Instead, I built a soft deletion feature where `is_deleted` becomes true, and updated all endpoints to filter these active queries. This provides the functionality of deleting without compromising historical data safety.
+2. **Stateless JWTs scale better than Sessions**:
+   I built the auth assuming the backend will need to scale heavily. For this reason, I chose JSON Web Tokens over traditional database sessions. Because the server doesn't need to hold a massive list of active sessions in memory, it requires far less compute power to manage authentication securely. I paired this with `passlib` bcrypt hashing to heavily secure user credentials.
